@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GradeReport Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root { color-scheme: light; --bg:#f4f6f8; --card:#fff; --text:#1f2937; --muted:#64748b; --accent:#2563eb; --accent2:#1d4ed8; --line:#dbe2ea; --ok:#166534; --bad:#991b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:860px; margin:40px auto; padding:0 18px 48px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:28px; box-shadow:0 10px 30px rgba(15,23,42,.06); }
+  h1 { margin:0 0 8px; font-size:30px; }
+  .sub { margin:0 0 24px; color:var(--muted); line-height:1.55; }
+  .drop { border:2px dashed #b8c5d6; border-radius:14px; padding:28px; text-align:center; background:#fafcff; }
+  .drop.drag { border-color:var(--accent); background:#eff6ff; }
+  input[type=file] { display:none; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:10px; padding:11px 16px; font-weight:700; cursor:pointer; background:var(--accent); color:#fff; }
+  .btn:hover { background:var(--accent2); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .secondary { background:#e8eef7; color:#1e3a5f; }
+  .secondary:hover { background:#dce6f3; }
+  .filename { margin-top:12px; font-weight:600; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:20px; }
+  .field label { display:block; font-size:13px; font-weight:700; color:#475569; margin-bottom:6px; }
+  .field input { width:100%; border:1px solid var(--line); border-radius:9px; padding:10px 11px; font:inherit; }
+  .actions { display:flex; gap:10px; margin-top:22px; flex-wrap:wrap; }
+  .status { margin-top:20px; border-radius:12px; padding:14px 16px; display:none; white-space:pre-line; line-height:1.45; }
+  .status.ok { display:block; background:#ecfdf5; color:var(--ok); border:1px solid #bbf7d0; }
+  .status.err { display:block; background:#fef2f2; color:var(--bad); border:1px solid #fecaca; }
+  .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:18px; }
+  .stat { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:13px; text-align:center; }
+  .stat strong { display:block; font-size:22px; }
+  .stat span { color:var(--muted); font-size:13px; }
+  details { margin-top:20px; color:#475569; }
+  details p { line-height:1.5; }
+  .privacy { margin-top:18px; color:var(--muted); font-size:13px; }
+  @media(max-width:620px){ .grid,.summary{grid-template-columns:1fr;} .card{padding:20px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>GradeReport Generator</h1>
+    <p class="sub">Choose the weekly CSV export. The app creates a formatted Excel workbook with dynamic <strong>High</strong>, <strong>Middle</strong>, and <strong>DF</strong> tables.</p>
+
+    <div id="drop" class="drop">
+      <input id="csvFile" type="file" accept=".csv,text/csv" />
+      <button class="btn secondary" id="chooseBtn" type="button">Choose CSV</button>
+      <div id="fileName" class="filename">No file selected</div>
+    </div>
+
+    <div class="grid">
+      <div class="field">
+        <label for="scoreHeading">Score column heading</label>
+        <input id="scoreHeading" value="Q3" maxlength="12" />
+      </div>
+      <div class="field">
+        <label for="outputDate">Report date</label>
+        <input id="outputDate" type="date" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="generateBtn" type="button" disabled>Generate Excel Report</button>
+    </div>
+
+    <div id="summary" class="summary" style="display:none">
+      <div class="stat"><strong id="highCount">0</strong><span>High rows</span></div>
+      <div class="stat"><strong id="middleCount">0</strong><span>Middle rows</span></div>
+      <div class="stat"><strong id="dfCount">0</strong><span>D/F rows</span></div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <details>
+      <summary>Report rules</summary>
+      <p><strong>High:</strong> grades 9–12 only. <strong>Middle:</strong> grades 6–8 only. <strong>DF:</strong> grades 6–12 with a D or F in the letter-grade column. Courses without a numeric Running Course Average are omitted. Each Excel table ends at the last actual data row; conditional formatting is applied to the full relevant columns.</p>
+    </details>
+    <div class="privacy">The CSV is processed in your browser. The student data is not uploaded by this page. An internet connection is only used to load the Excel/CSV JavaScript libraries.</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const fileInput = document.getElementById('csvFile');
+  const chooseBtn = document.getElementById('chooseBtn');
+  const generateBtn = document.getElementById('generateBtn');
+  const fileName = document.getElementById('fileName');
+  const status = document.getElementById('status');
+  const drop = document.getElementById('drop');
+  const outputDate = document.getElementById('outputDate');
+  const scoreHeading = document.getElementById('scoreHeading');
+  const summary = document.getElementById('summary');
+  let selectedFile = null;
+
+  chooseBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => setFile(fileInput.files[0]));
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) setFile(f); });
+  generateBtn.addEventListener('click', generateReport);
+
+  function setFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    fileName.textContent = file.name;
+    generateBtn.disabled = false;
+    status.className = 'status';
+    status.textContent = '';
+    detectDate(file);
+  }
+
+  async function detectDate(file) {
+    try {
+      const text = await file.text();
+      const m = text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/i);
+      if (m) {
+        const d = new Date(`${m[1]} ${m[2]}, ${m[3]} 12:00:00`);
+        if (!Number.isNaN(d.getTime())) outputDate.value = toISODate(d);
+      }
+    } catch (_) {}
+    if (!outputDate.value) outputDate.value = toISODate(new Date());
+  }
+
+  function toISODate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function shortDate(iso) {
+    const [y,m,d] = iso.split('-');
+    return `${y.slice(-2)}-${m}-${d}`;
+  }
+
+  function gradeLetter(n) {
+    if (n >= 90) return 'A';
+    if (n >= 80) return 'B';
+    if (n >= 70) return 'C';
+    if (n >= 60) return 'D';
+    return 'F';
+  }
+
+  function num(v) {
+    const n = Number(String(v ?? '').trim());
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function cleanGrade(v) {
+    const n = parseInt(String(v ?? '').replace(/^0+/, '') || '0', 10);
+    return Number.isInteger(n) && n >= 6 && n <= 12 ? n : null;
+  }
+
+  function parseReport(rows) {
+    let map = null;
+    const data = [];
+    for (const row of rows) {
+      const normalized = row.map(x => String(x ?? '').trim());
+      if ((normalized[0] || '').toLowerCase() === 'student name') {
+        const idx = name => normalized.findIndex(x => x.toLowerCase() === name.toLowerCase());
+        map = {
+          student: idx('Student Name'),
+          grade: idx('Grade'),
+          course: idx('Course Description'),
+          teacher: idx('Teacher Name'),
+          track: idx('Track ID'),
+          avg: idx('Running Course Average'),
+          gpa: idx('GPA')
+        };
+        if (Object.values(map).some(v => v < 0)) throw new Error('The CSV header was found, but one or more required columns are missing.');
+        continue;
+      }
+      if (!map) continue;
+      const student = normalized[map.student];
+      const grade = cleanGrade(normalized[map.grade]);
+      const avg = num(normalized[map.avg]);
+      if (!student || grade === null || avg === null) continue;
+      data.push({
+        student,
+        grade,
+        avg,
+        letter: gradeLetter(avg),
+        course: normalized[map.course],
+        teacher: normalized[map.teacher],
+        track: normalized[map.track],
+        gpa: num(normalized[map.gpa])
+      });
+    }
+    if (!map) throw new Error('Could not find the CSV row beginning with "Student Name".');
+    if (!data.length) throw new Error('No course rows with numeric Running Course Average values were found.');
+    return data;
+  }
+
+  function sortRows(a,b) {
+    return (b.grade - a.grade) || a.student.localeCompare(b.student, undefined, {sensitivity:'base'}) || (b.avg - a.avg) || a.course.localeCompare(b.course);
+  }
+
+  function excelRows(records) {
+    return records.map(r => [r.student, r.grade, r.avg, r.letter, r.course, r.teacher, r.track, r.gpa]);
+  }
+
+  function styleWorksheet(ws, isDF=false) {
+    ws.views = [{state:'frozen', ySplit:1, topLeftCell:'A2', activeCell:'A2'}];
+    const widths = [21.43,10.43,10.86,7.57,26.43,16.86,12.14,7.86];
+    widths.forEach((w,i) => ws.getColumn(i+1).width = w);
+    ws.getColumn(1).alignment = {shrinkToFit:true};
+    [2,3,4,7,8].forEach(c => ws.getColumn(c).alignment = {horizontal:'center'});
+    ws.getColumn(3).numFmt = '0.00';
+    ws.getColumn(8).numFmt = '0.00';
+    ws.getRow(1).font = {bold:true, color:{argb:'FFFFFFFF'}};
+
+    // Grade-level color scale across the entire column.
+    ws.addConditionalFormatting({
+      ref:'B1:B1048576',
+      rules:[{type:'colorScale', cfvo:[{type:'min'},{type:'max'}], color:[{argb:'FF63BE7B'},{argb:'FFFCFCFF'}]}]
+    });
+
+    const letterRules = [
+      ['A','FF00B0F0','FF000000'],
+      ['B','FF92D050','FF000000'],
+      ['C','FFFFEB9C','FF9C5700'],
+      ['D','FFFFEB9C','FF9C5700'],
+      ['F','FFFFC7CE','FF9C0006']
+    ];
+    for (const [letter,fill,font] of letterRules) {
+      ws.addConditionalFormatting({
+        ref:'D1:D1048576',
+        rules:[{type:'expression', formulae:[`D1="${letter}"`], style:{font:{color:{argb:font}}, fill:{type:'pattern',pattern:'solid',fgColor:{argb:fill}}}}]
+      });
+    }
+    ws.addConditionalFormatting({
+      ref:'H1:H1048576',
+      rules:[{type:'cellIs', operator:'between', formulae:[0.001,2], style:{font:{color:{argb:'FF9C0006'}}, fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFFFC7CE'}}}}]
+    });
+    if (isDF) {
+      ws.addConditionalFormatting({
+        ref:'A1:A1048576',
+        rules:[{type:'expression', formulae:['COUNTIF($A:$A,A1)>1'], style:{font:{color:{argb:'FF9C5700'}}, fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFFFEB9C'}}}}]
+      });
+    }
+  }
+
+  function addSheet(workbook, name, tableName, records, isDF=false) {
+    const ws = workbook.addWorksheet(name);
+    const heading = (scoreHeading.value || 'Q3').trim();
+    ws.addTable({
+      name: tableName,
+      ref:'A1',
+      headerRow:true,
+      totalsRow:false,
+      style:{theme:'TableStyleMedium2', showRowStripes:true, showFirstColumn:false, showLastColumn:false, showColumnStripes:false},
+      columns:[
+        {name:'Student Name'}, {name:'Grade'}, {name:heading}, {name:'Ltr'},
+        {name:'Course Description'}, {name:'GPA'}, {name:'Track ID'}, {name:'GPA2'}
+      ],
+      rows:excelRows(records)
+    });
+    styleWorksheet(ws,isDF);
+    return ws;
+  }
+
+  async function generateReport() {
+    if (!selectedFile) return;
+    if (typeof ExcelJS === 'undefined' || typeof Papa === 'undefined') {
+      showError('The Excel/CSV libraries did not load. Connect to the internet and reopen this HTML file, then try again.');
+      return;
+    }
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating…';
+    status.className = 'status';
+    summary.style.display = 'none';
+    try {
+      const text = await selectedFile.text();
+      const parsed = Papa.parse(text, {skipEmptyLines:false});
+      if (parsed.errors?.some(e => e.type === 'Quotes' || e.type === 'Delimiter')) {
+        throw new Error('The CSV could not be parsed cleanly. Please export it again and retry.');
+      }
+      const all = parseReport(parsed.data);
+      const high = all.filter(r => r.grade >= 9 && r.grade <= 12).sort(sortRows);
+      const middle = all.filter(r => r.grade >= 6 && r.grade <= 8).sort(sortRows);
+      const df = all.filter(r => r.grade >= 6 && r.grade <= 12 && (r.letter === 'D' || r.letter === 'F')).sort(sortRows);
+
+      const iso = outputDate.value || toISODate(new Date());
+      const tag = shortDate(iso);
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'GradeReport Generator';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+
+      addSheet(workbook, `High ${tag}`, 'TableHigh', high, false);
+      addSheet(workbook, `Middle ${tag}`, 'TableMiddle', middle, false);
+      addSheet(workbook, 'DF', 'TableDF', df, true);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GradeReport ${tag}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      document.getElementById('highCount').textContent = high.length.toLocaleString();
+      document.getElementById('middleCount').textContent = middle.length.toLocaleString();
+      document.getElementById('dfCount').textContent = df.length.toLocaleString();
+      summary.style.display = 'grid';
+      showOK(`Report created successfully.\nHigh: ${high.length} rows | Middle: ${middle.length} rows | DF: ${df.length} rows\nEach table was sized to its actual data rows.`);
+    } catch (err) {
+      console.error(err);
+      showError(err?.message || String(err));
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = 'Generate Excel Report';
+    }
+  }
+
+  function showOK(msg) { status.textContent = msg; status.className = 'status ok'; }
+  function showError(msg) { status.textContent = msg; status.className = 'status err'; }
+})();
+</script>
+</body>
+</html>
