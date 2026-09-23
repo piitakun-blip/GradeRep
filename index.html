@@ -7,6 +7,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 <style>
   :root {
@@ -331,7 +332,9 @@
         <strong>DF:</strong> grades 6–12 with a D or F in the letter-grade column.
         Rows with a blank Running Course Average are deleted; only rows with an actual numeric grade are included.
         Each Excel table ends at the last actual data row;
-        conditional formatting is applied to the full relevant columns.
+        row 1 stays frozen and includes Excel sort/filter dropdowns;
+        columns A–H remain visible, columns I–XFD are hidden,
+        and rows below the final table row are hidden.
       </p>
 
     </details>
@@ -1596,7 +1599,148 @@
     }
 
 
+    /*
+      Explicitly enable Excel sort/filter dropdowns on row 1.
+      The filter range always covers the actual data rows on the sheet.
+    */
+    ws.autoFilter = {
+      from:'A1',
+      to:`H${Math.max(ws.rowCount, 1)}`
+    };
+
+
     return ws;
+
+  }
+
+
+
+  async function applyVisibleSheetBounds(buffer) {
+
+    if (typeof JSZip === 'undefined')
+      throw new Error(
+        'The workbook visibility library did not load. Connect to the internet and reopen the app.'
+      );
+
+    const zip =
+      await JSZip.loadAsync(buffer);
+
+    const worksheetFiles =
+      Object.keys(zip.files)
+        .filter(name =>
+          /^xl\/worksheets\/sheet\d+\.xml$/i.test(name)
+        );
+
+
+    for (const fileName of worksheetFiles) {
+
+      let xml =
+        await zip.file(fileName).async('string');
+
+
+      /*
+        Hide all unspecified rows by default.
+        Every actual report row already exists explicitly in the XML,
+        so those rows are then forced visible below.
+      */
+      if (/<sheetFormatPr\b/i.test(xml)) {
+
+        xml =
+          xml.replace(
+            /<sheetFormatPr\b([^>]*)\/>/i,
+            (match, attrs) => {
+
+              let updated =
+                attrs.replace(
+                  /\s+zeroHeight="[^"]*"/i,
+                  ''
+                );
+
+              return `<sheetFormatPr${updated} zeroHeight="1"/>`;
+
+            }
+          );
+
+      } else {
+
+        xml =
+          xml.replace(
+            /(<sheetData\b)/i,
+            '<sheetFormatPr zeroHeight="1"/>\n$1'
+          );
+
+      }
+
+
+      /*
+        Explicit report rows stay visible.
+      */
+      xml =
+        xml.replace(
+          /<row\b([^>]*)>/gi,
+          (match, attrs) => {
+
+            let updated =
+              attrs.replace(
+                /\s+hidden="[^"]*"/i,
+                ''
+              );
+
+            return `<row${updated} hidden="0">`;
+
+          }
+        );
+
+
+      /*
+        Hide every Excel column to the right of H using one compact
+        column-range definition instead of creating 16,000+ objects.
+      */
+      const hiddenCols =
+        '<col min="9" max="16384" hidden="1"/>';
+
+
+      if (/<cols\b[^>]*>/i.test(xml)) {
+
+        xml =
+          xml.replace(
+            /<\/cols>/i,
+            `${hiddenCols}</cols>`
+          );
+
+      } else {
+
+        const colsBlock =
+          `<cols>${hiddenCols}</cols>`;
+
+        if (/<sheetData\b/i.test(xml)) {
+
+          xml =
+            xml.replace(
+              /(<sheetData\b)/i,
+              `${colsBlock}\n$1`
+            );
+
+        }
+
+      }
+
+
+      zip.file(
+        fileName,
+        xml
+      );
+
+    }
+
+
+    return await zip.generateAsync({
+      type:'arraybuffer',
+      compression:'DEFLATE',
+      compressionOptions:{
+        level:6
+      }
+    });
 
   }
 
@@ -1610,7 +1754,8 @@
 
     if (
       typeof ExcelJS === 'undefined' ||
-      typeof Papa === 'undefined'
+      typeof Papa === 'undefined' ||
+      typeof JSZip === 'undefined'
     ) {
 
       showError(
@@ -1762,9 +1907,13 @@
         await workbook.xlsx.writeBuffer();
 
 
+      const boundedBuffer =
+        await applyVisibleSheetBounds(buffer);
+
+
       const blob =
         new Blob(
-          [buffer],
+          [boundedBuffer],
           {
             type:
               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -1826,7 +1975,7 @@
       showOK(
         `Report created successfully.
 High: ${high.length} rows | Middle: ${middle.length} rows | DF: ${df.length} rows
-Each table was sized to its actual data rows, with visible grade and GPA fills applied.`
+Each table was sized to its actual data rows; unused columns and rows were hidden, with filters, frozen headers, and visible grade/GPA fills retained.`
       );
 
     }
