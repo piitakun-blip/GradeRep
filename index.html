@@ -326,7 +326,7 @@
         <strong>High:</strong> grades 9–12 only.
         <strong>Middle:</strong> grades 6–8 only.
         <strong>DF:</strong> grades 6–12 with a D or F in the letter-grade column.
-        Courses without a numeric Running Course Average are omitted.
+        Rows with a blank Running Course Average are deleted; only rows with an actual numeric grade are included.
         Each Excel table ends at the last actual data row;
         conditional formatting is applied to the full relevant columns.
       </p>
@@ -546,13 +546,27 @@
 
 
 
-  function num(v) {
+  function isBlankValue(v) {
 
     const text =
-      String(v ?? '').trim();
+      String(v ?? '')
+        .replace(/[\u00A0\u200B\uFEFF]/g, '')
+        .trim();
 
-    if (text === '')
+    return text === '';
+
+  }
+
+
+  function num(v) {
+
+    if (isBlankValue(v))
       return null;
+
+    const text =
+      String(v)
+        .replace(/[\u00A0\u200B\uFEFF]/g, '')
+        .trim();
 
     const n =
       Number(text);
@@ -669,10 +683,22 @@
           normalized[map.grade]
         );
 
+      const avgRaw =
+        normalized[map.avg];
+
+
+      /*
+        IMPORTANT:
+        A blank Running Course Average means there is no current grade.
+        Reject the entire source row BEFORE numeric conversion so a blank
+        can never be interpreted as numeric zero.
+      */
+      if (isBlankValue(avgRaw))
+        continue;
+
+
       const avg =
-        num(
-          normalized[map.avg]
-        );
+        num(avgRaw);
 
 
       if (
@@ -1103,7 +1129,7 @@
 
         {name:'Course Description'},
 
-        {name:'Teacher Name'},
+        {name:'Teacher'},
 
         {name:'Track ID'},
 
