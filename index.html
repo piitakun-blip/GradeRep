@@ -5,7 +5,2094 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>GradeReport Generator</title>
 
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GradeReport Generator</title>
+
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<style>
+  :root {
+    color-scheme: light;
+    --bg:#f4f6f8;
+    --card:#fff;
+    --text:#1f2937;
+    --muted:#64748b;
+    --accent:#2563eb;
+    --accent2:#1d4ed8;
+    --line:#dbe2ea;
+    --ok:#166534;
+    --bad:#991b1b;
+  }
+
+  * { box-sizing:border-box; }
+
+  body {
+    margin:0;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+
+  .wrap {
+    max-width:860px;
+    margin:40px auto;
+    padding:0 18px 48px;
+  }
+
+  .card {
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:28px;
+    box-shadow:0 10px 30px rgba(15,23,42,.06);
+  }
+
+  h1 {
+    margin:0 0 8px;
+    font-size:30px;
+  }
+
+  .sub {
+    margin:0 0 24px;
+    color:var(--muted);
+    line-height:1.55;
+  }
+
+  .drop {
+    border:2px dashed #b8c5d6;
+    border-radius:14px;
+    padding:28px;
+    text-align:center;
+    background:#fafcff;
+  }
+
+  .drop.drag {
+    border-color:var(--accent);
+    background:#eff6ff;
+  }
+
+  input[type=file] {
+    display:none;
+  }
+
+  .btn {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    border:0;
+    border-radius:10px;
+    padding:11px 16px;
+    font-weight:700;
+    cursor:pointer;
+    background:var(--accent);
+    color:#fff;
+  }
+
+  .btn:hover {
+    background:var(--accent2);
+  }
+
+  .btn:disabled {
+    opacity:.5;
+    cursor:not-allowed;
+  }
+
+  .secondary {
+    background:#e8eef7;
+    color:#1e3a5f;
+  }
+
+  .secondary:hover {
+    background:#dce6f3;
+  }
+
+  .filename {
+    margin-top:12px;
+    font-weight:600;
+  }
+
+  .grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-top:20px;
+  }
+
+  .field label {
+    display:block;
+    font-size:13px;
+    font-weight:700;
+    color:#475569;
+    margin-bottom:6px;
+  }
+
+  .field input,
+  .field select {
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:10px 11px;
+    font:inherit;
+    background:#fff;
+  }
+
+  .actions {
+    display:flex;
+    gap:10px;
+    margin-top:22px;
+    flex-wrap:wrap;
+  }
+
+  .status {
+    margin-top:20px;
+    border-radius:12px;
+    padding:14px 16px;
+    display:none;
+    white-space:pre-line;
+    line-height:1.45;
+  }
+
+  .status.ok {
+    display:block;
+    background:#ecfdf5;
+    color:var(--ok);
+    border:1px solid #bbf7d0;
+  }
+
+  .status.err {
+    display:block;
+    background:#fef2f2;
+    color:var(--bad);
+    border:1px solid #fecaca;
+  }
+
+  .summary {
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+    margin-top:18px;
+  }
+
+  .stat {
+    background:#f8fafc;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:13px;
+    text-align:center;
+  }
+
+  .stat strong {
+    display:block;
+    font-size:22px;
+  }
+
+  .stat span {
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  details {
+    margin-top:20px;
+    color:#475569;
+  }
+
+  details p {
+    line-height:1.5;
+  }
+
+  .privacy {
+    margin-top:18px;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  @media(max-width:620px) {
+    .grid,
+    .summary {
+      grid-template-columns:1fr;
+    }
+
+    .card {
+      padding:20px;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+  <div class="card">
+
+    <h1>GradeReport Generator</h1>
+
+    <p class="sub">
+      Choose the weekly CSV export. The app creates a formatted Excel workbook
+      with dynamic <strong>High</strong>, <strong>Middle</strong>, and
+      <strong>DF</strong> tables.
+    </p>
+
+    <div id="drop" class="drop">
+
+      <input
+        id="csvFile"
+        type="file"
+        accept=".csv,text/csv"
+      />
+
+      <button
+        class="btn secondary"
+        id="chooseBtn"
+        type="button">
+        Choose CSV
+      </button>
+
+      <div id="fileName" class="filename">
+        No file selected
+      </div>
+
+    </div>
+
+    <div class="grid">
+
+      <div class="field">
+        <label for="scoreHeading">
+          Score column heading
+        </label>
+
+        <select id="scoreHeading">
+          <option value="Q1">Q1</option>
+          <option value="Q2">Q2</option>
+          <option value="Q3">Q3</option>
+          <option value="Q4">Q4</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="outputDate">
+          Report date
+        </label>
+
+        <input
+          id="outputDate"
+          type="date"
+        />
+      </div>
+
+    </div>
+
+    <div class="actions">
+
+      <button
+        class="btn"
+        id="generateBtn"
+        type="button"
+        disabled>
+        Generate Excel Report
+      </button>
+
+    </div>
+
+    <div
+      id="summary"
+      class="summary"
+      style="display:none">
+
+      <div class="stat">
+        <strong id="highCount">0</strong>
+        <span>High rows</span>
+      </div>
+
+      <div class="stat">
+        <strong id="middleCount">0</strong>
+        <span>Middle rows</span>
+      </div>
+
+      <div class="stat">
+        <strong id="dfCount">0</strong>
+        <span>D/F rows</span>
+      </div>
+
+    </div>
+
+    <div
+      id="status"
+      class="status">
+    </div>
+
+    <details>
+
+      <summary>
+        Report rules
+      </summary>
+
+      <p>
+        <strong>High:</strong> grades 9–12 only.
+        <strong>Middle:</strong> grades 6–8 only.
+        <strong>DF:</strong> grades 6–12 with a D or F in the letter-grade column.
+        Rows with a blank Running Course Average are deleted; only rows with an actual numeric grade are included.
+        Each Excel table ends at the last actual data row;
+        row 1 stays frozen and includes Excel sort/filter dropdowns;
+        columns A–H remain visible, columns I–XFD are hidden,
+        and rows below the final table row are hidden.
+      </p>
+
+    </details>
+
+    <div class="privacy">
+      The CSV is processed in your browser.
+      The student data is not uploaded by this page.
+      The CSV reader preserves UTF-8 and common Windows-1252 accented characters.
+      An internet connection is only used to load the Excel/CSV JavaScript libraries.
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+
+(() => {
+
+  const fileInput =
+    document.getElementById('csvFile');
+
+  const chooseBtn =
+    document.getElementById('chooseBtn');
+
+  const generateBtn =
+    document.getElementById('generateBtn');
+
+  const fileName =
+    document.getElementById('fileName');
+
+  const status =
+    document.getElementById('status');
+
+  const drop =
+    document.getElementById('drop');
+
+  const outputDate =
+    document.getElementById('outputDate');
+
+  const scoreHeading =
+    document.getElementById('scoreHeading');
+
+  const summary =
+    document.getElementById('summary');
+
+  const quarterStorageKey =
+    'gradeReportLastQuarter';
+
+  let selectedFile = null;
+
+
+  const savedQuarter =
+    localStorage.getItem(quarterStorageKey);
+
+  if (['Q1','Q2','Q3','Q4'].includes(savedQuarter)) {
+    scoreHeading.value = savedQuarter;
+  } else {
+    scoreHeading.value = 'Q1';
+  }
+
+
+  scoreHeading.addEventListener(
+    'change',
+    () => {
+      localStorage.setItem(
+        quarterStorageKey,
+        scoreHeading.value
+      );
+    }
+  );
+
+
+  chooseBtn.addEventListener(
+    'click',
+    () => fileInput.click()
+  );
+
+
+  fileInput.addEventListener(
+    'change',
+    () => setFile(fileInput.files[0])
+  );
+
+
+  ['dragenter','dragover'].forEach(ev =>
+
+    drop.addEventListener(ev, e => {
+
+      e.preventDefault();
+
+      drop.classList.add('drag');
+
+    })
+
+  );
+
+
+  ['dragleave','drop'].forEach(ev =>
+
+    drop.addEventListener(ev, e => {
+
+      e.preventDefault();
+
+      drop.classList.remove('drag');
+
+    })
+
+  );
+
+
+  drop.addEventListener('drop', e => {
+
+    const f =
+      e.dataTransfer.files[0];
+
+    if (f)
+      setFile(f);
+
+  });
+
+
+  generateBtn.addEventListener(
+    'click',
+    generateReport
+  );
+
+
+
+  function setFile(file) {
+
+    if (!file)
+      return;
+
+    selectedFile = file;
+
+    fileName.textContent =
+      file.name;
+
+    generateBtn.disabled =
+      false;
+
+    status.className =
+      'status';
+
+    status.textContent =
+      '';
+
+    detectDate(file);
+
+  }
+
+
+
+  async function readCsvText(file) {
+
+    const buffer =
+      await file.arrayBuffer();
+
+    const bytes =
+      new Uint8Array(buffer);
+
+
+    /* UTF-8 BOM */
+    if (
+      bytes.length >= 3 &&
+      bytes[0] === 0xEF &&
+      bytes[1] === 0xBB &&
+      bytes[2] === 0xBF
+    ) {
+      return new TextDecoder('utf-8')
+        .decode(bytes.subarray(3));
+    }
+
+
+    /* UTF-16 LE BOM */
+    if (
+      bytes.length >= 2 &&
+      bytes[0] === 0xFF &&
+      bytes[1] === 0xFE
+    ) {
+      return new TextDecoder('utf-16le')
+        .decode(bytes.subarray(2));
+    }
+
+
+    /* UTF-16 BE BOM */
+    if (
+      bytes.length >= 2 &&
+      bytes[0] === 0xFE &&
+      bytes[1] === 0xFF
+    ) {
+      return new TextDecoder('utf-16be')
+        .decode(bytes.subarray(2));
+    }
+
+
+    /*
+      First try strict UTF-8. If the CSV contains bytes that are not valid
+      UTF-8, fall back to Windows-1252, which is common in school-system
+      exports and preserves characters such as í, é, ñ, ü, etc.
+    */
+    try {
+
+      return new TextDecoder(
+        'utf-8',
+        { fatal:true }
+      ).decode(bytes);
+
+    }
+    catch (_) {
+
+      return new TextDecoder(
+        'windows-1252'
+      ).decode(bytes);
+
+    }
+
+  }
+
+
+  async function detectDate(file) {
+
+    try {
+
+      const text =
+        await readCsvText(file);
+
+      const m =
+        text.match(
+          /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/i
+        );
+
+      if (m) {
+
+        const d =
+          new Date(
+            `${m[1]} ${m[2]}, ${m[3]} 12:00:00`
+          );
+
+        if (!Number.isNaN(d.getTime()))
+          outputDate.value =
+            toISODate(d);
+
+      }
+
+    }
+    catch (_) {}
+
+    if (!outputDate.value)
+      outputDate.value =
+        toISODate(new Date());
+
+  }
+
+
+
+  function toISODate(d) {
+
+    const y =
+      d.getFullYear();
+
+    const m =
+      String(
+        d.getMonth() + 1
+      ).padStart(2,'0');
+
+    const day =
+      String(
+        d.getDate()
+      ).padStart(2,'0');
+
+    return `${y}-${m}-${day}`;
+
+  }
+
+
+
+  function shortDate(iso) {
+
+    const [y,m,d] =
+      iso.split('-');
+
+    return `${y.slice(-2)}-${m}-${d}`;
+
+  }
+
+
+
+  function gradeLetter(n) {
+
+    if (n >= 89.5)
+      return 'A';
+
+    if (n >= 79.5)
+      return 'B';
+
+    if (n >= 69.5)
+      return 'C';
+
+    if (n >= 59.5)
+      return 'D';
+
+    return 'F';
+
+  }
+
+
+
+  function isBlankValue(v) {
+
+    const text =
+      String(v ?? '')
+        .replace(/[\u00A0\u200B\uFEFF]/g, '')
+        .trim();
+
+    return text === '';
+
+  }
+
+
+  function num(v) {
+
+    if (isBlankValue(v))
+      return null;
+
+    const text =
+      String(v)
+        .replace(/[\u00A0\u200B\uFEFF]/g, '')
+        .trim();
+
+    const n =
+      Number(text);
+
+    return Number.isFinite(n)
+      ? n
+      : null;
+
+  }
+
+
+
+  function cleanGrade(v) {
+
+    const n =
+      parseInt(
+        String(v ?? '')
+          .replace(/^0+/, '') || '0',
+        10
+      );
+
+    return (
+      Number.isInteger(n) &&
+      n >= 6 &&
+      n <= 12
+    )
+      ? n
+      : null;
+
+  }
+
+
+
+  function parseReport(rows) {
+
+    let map = null;
+
+    const data = [];
+
+
+    for (const row of rows) {
+
+      const normalized =
+        row.map(
+          x => String(x ?? '').trim()
+        );
+
+
+      if (
+        (normalized[0] || '')
+          .toLowerCase() === 'student name'
+      ) {
+
+        const idx =
+          name =>
+            normalized.findIndex(
+              x =>
+                x.toLowerCase() ===
+                name.toLowerCase()
+            );
+
+
+        map = {
+
+          student:
+            idx('Student Name'),
+
+          grade:
+            idx('Grade'),
+
+          course:
+            idx('Course Description'),
+
+          teacher:
+            idx('Teacher Name'),
+
+          track:
+            idx('Track ID'),
+
+          avg:
+            idx('Running Course Average'),
+
+          gpa:
+            idx('GPA')
+
+        };
+
+
+        if (
+          Object.values(map)
+            .some(v => v < 0)
+        ) {
+
+          throw new Error(
+            'The CSV header was found, but one or more required columns are missing.'
+          );
+
+        }
+
+        continue;
+
+      }
+
+
+      if (!map)
+        continue;
+
+
+      const student =
+        normalized[map.student];
+
+      const grade =
+        cleanGrade(
+          normalized[map.grade]
+        );
+
+      const avgRaw =
+        normalized[map.avg];
+
+
+      /*
+        IMPORTANT:
+        A blank Running Course Average means there is no current grade.
+        Reject the entire source row BEFORE numeric conversion so a blank
+        can never be interpreted as numeric zero.
+      */
+      if (isBlankValue(avgRaw))
+        continue;
+
+
+      const avg =
+        num(avgRaw);
+
+
+      if (
+        !student ||
+        grade === null ||
+        avg === null
+      )
+        continue;
+
+
+      data.push({
+
+        student,
+
+        grade,
+
+        avg,
+
+        letter:
+          gradeLetter(avg),
+
+        course:
+          normalized[map.course],
+
+        teacher:
+          normalized[map.teacher],
+
+        track:
+          normalized[map.track],
+
+        gpa:
+          num(
+            normalized[map.gpa]
+          )
+
+      });
+
+    }
+
+
+    if (!map) {
+
+      throw new Error(
+        'Could not find the CSV row beginning with "Student Name".'
+      );
+
+    }
+
+
+    if (!data.length) {
+
+      throw new Error(
+        'No course rows with numeric Running Course Average values were found.'
+      );
+
+    }
+
+
+    return data;
+
+  }
+
+
+
+  function sortRows(a,b) {
+
+    return (
+      (b.grade - a.grade) ||
+
+      a.student.localeCompare(
+        b.student,
+        undefined,
+        {sensitivity:'base'}
+      ) ||
+
+      (b.avg - a.avg) ||
+
+      a.course.localeCompare(
+        b.course
+      )
+    );
+
+  }
+
+
+
+  function excelRows(records) {
+
+    return records.map(r => [
+
+      r.student,
+
+      r.grade,
+
+      r.avg,
+
+      r.letter,
+
+      r.course,
+
+      r.teacher,
+
+      r.track,
+
+      r.gpa
+
+    ]);
+
+  }
+
+
+
+  function styleWorksheet(
+    ws,
+    isDF = false
+  ) {
+
+    ws.views = [{
+
+      state:'frozen',
+
+      ySplit:1,
+
+      topLeftCell:'A2',
+
+      activeCell:'A2'
+
+    }];
+
+
+    const widths = [
+
+      21.43,
+
+      10.43,
+
+      10.86,
+
+      7.57,
+
+      26.43,
+
+      16.86,
+
+      12.14,
+
+      7.86
+
+    ];
+
+
+    widths.forEach(
+      (w,i) =>
+        ws.getColumn(i+1).width = w
+    );
+
+
+    ws.getColumn(1).alignment = {
+      shrinkToFit:true
+    };
+
+
+    [2,3,4,7,8].forEach(c =>
+
+      ws.getColumn(c).alignment = {
+        horizontal:'center'
+      }
+
+    );
+
+
+    ws.getColumn(3).numFmt =
+      '0.00';
+
+    ws.getColumn(8).numFmt =
+      '0.00';
+
+
+    ws.getRow(1).font = {
+
+      bold:true,
+
+      color:{
+        argb:'FFFFFFFF'
+      }
+
+    };
+
+
+    /* Grade column */
+
+    ws.addConditionalFormatting({
+
+      ref:'B1:B1048576',
+
+      rules:[{
+
+        type:'colorScale',
+
+        cfvo:[
+          {type:'min'},
+          {type:'max'}
+        ],
+
+        color:[
+
+          {argb:'FF63BE7B'},
+
+          {argb:'FFFCFCFF'}
+
+        ]
+
+      }]
+
+    });
+
+
+    /* Letter-grade formatting */
+
+    const letterRules = [
+
+      ['A','FF00B0F0','FF000000'],
+
+      ['B','FF92D050','FF000000'],
+
+      ['C','FFD9D9D9','FF000000'],
+
+      ['D','FFFFEB9C','FF9C5700'],
+
+      ['F','FFFFC7CE','FF9C0006']
+
+    ];
+
+
+    for (
+      const [letter,fill,font]
+      of letterRules
+    ) {
+
+      ws.addConditionalFormatting({
+
+        ref:'D1:D1048576',
+
+        rules:[{
+
+          type:'expression',
+
+          formulae:[
+            `D1="${letter}"`
+          ],
+
+          style:{
+
+            font:{
+
+              color:{
+                argb:font
+              }
+
+            },
+
+            fill:{
+
+              type:'pattern',
+
+              pattern:'solid',
+
+              fgColor:{
+                argb:fill
+              }
+
+            }
+
+          }
+
+        }]
+
+      });
+
+    }
+
+
+    /* GPA formatting */
+
+    ws.addConditionalFormatting({
+
+      ref:'H1:H1048576',
+
+      rules:[{
+
+        type:'expression',
+
+        formulae:[
+          'AND(ISNUMBER(H1),H1<=2)'
+        ],
+
+        style:{
+
+          font:{
+
+            color:{
+              argb:'FF9C0006'
+            }
+
+          },
+
+          fill:{
+
+            type:'pattern',
+
+            pattern:'solid',
+
+            fgColor:{
+              argb:'FFFFC7CE'
+            }
+
+          }
+
+        }
+
+      }]
+
+    });
+
+
+    /* Duplicate student names on DF tab */
+
+    if (isDF) {
+
+      ws.addConditionalFormatting({
+
+        ref:'A1:A1048576',
+
+        rules:[{
+
+          type:'expression',
+
+          formulae:[
+            'AND(A1<>"",COUNTIF($A:$A,A1)>1)'
+          ],
+
+          style:{
+
+            font:{
+
+              color:{
+                argb:'FF7F6000'
+              }
+
+            },
+
+            fill:{
+
+              type:'pattern',
+
+              pattern:'solid',
+
+              fgColor:{
+                argb:'FFFFFF00'
+              }
+
+            }
+
+          }
+
+        }]
+
+      });
+
+    }
+
+  }
+
+
+
+  function addSheet(
+    workbook,
+    name,
+    tableName,
+    records,
+    isDF = false,
+    sheetColor = 'FF5B9BD5'
+  ) {
+
+    const ws =
+      workbook.addWorksheet(name);
+
+
+    const heading =
+      (scoreHeading.value || 'Q1').trim();
+
+
+    const table =
+      ws.addTable({
+
+      name:tableName,
+
+      ref:'A1',
+
+      headerRow:true,
+
+      totalsRow:false,
+
+      style:{
+
+        theme:'TableStyleMedium2',
+
+        showRowStripes:true,
+
+        showFirstColumn:false,
+
+        showLastColumn:false,
+
+        showColumnStripes:false
+
+      },
+
+      columns:[
+
+        {name:'Student Name'},
+
+        {name:'Grade'},
+
+        {name:heading},
+
+        {name:'Ltr'},
+
+        {name:'Course Description'},
+
+        {name:'Teacher'},
+
+        {name:'Track ID'},
+
+        {name:'GPA'}
+
+      ],
+
+      rows:
+        excelRows(records)
+
+    });
+
+
+    /*
+      Commit the Excel table before applying custom cell fills.
+      Otherwise the table style can overwrite fills during serialization.
+    */
+    if (table && typeof table.commit === 'function') {
+      table.commit();
+    }
+
+
+    styleWorksheet(
+      ws,
+      isDF
+    );
+
+
+    ws.properties.tabColor = {
+      argb: sheetColor
+    };
+
+
+    ws.getRow(1).eachCell(cell => {
+
+      cell.fill = {
+        type:'pattern',
+        pattern:'solid',
+        fgColor:{
+          argb:sheetColor
+        }
+      };
+
+      cell.font = {
+        bold:true,
+        color:{
+          argb:'FFFFFFFF'
+        }
+      };
+
+    });
+
+
+    /*
+      Directly fill duplicate names on the DF sheet as well.
+      This guarantees the yellow background is visible even in
+      Excel versions that render conditional-format fills differently.
+    */
+    if (isDF) {
+
+      const counts = new Map();
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const value =
+          String(ws.getCell(r, 1).value ?? '').trim();
+
+        if (!value)
+          continue;
+
+        counts.set(
+          value,
+          (counts.get(value) || 0) + 1
+        );
+
+      }
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const cell =
+          ws.getCell(r, 1);
+
+        const value =
+          String(cell.value ?? '').trim();
+
+        if (
+          value &&
+          (counts.get(value) || 0) > 1
+        ) {
+
+          cell.fill = {
+            type:'pattern',
+            pattern:'solid',
+            fgColor:{
+              argb:'FFFFFF00'
+            }
+          };
+
+          cell.font = {
+            color:{
+              argb:'FF7F6000'
+            }
+          };
+
+        }
+
+      }
+
+    }
+
+
+    /*
+      Apply visible fills directly to the generated workbook.
+      This is more reliable than depending on ExcelJS conditional
+      formatting rendering support.
+    */
+    const letterFillMap = {
+
+      A:{
+        fill:'FF00B0F0',
+        font:'FF000000'
+      },
+
+      B:{
+        fill:'FF92D050',
+        font:'FF000000'
+      },
+
+      C:{
+        fill:'FFD9D9D9',
+        font:'FF000000'
+      },
+
+      D:{
+        fill:'FFFFEB9C',
+        font:'FF9C5700'
+      },
+
+      F:{
+        fill:'FFFFC7CE',
+        font:'FF9C0006'
+      }
+
+    };
+
+
+    for (let r = 2; r <= ws.rowCount; r++) {
+
+      const letterCell =
+        ws.getCell(r, 4);
+
+      const letter =
+        String(letterCell.value ?? '').trim().toUpperCase();
+
+      if (letterFillMap[letter]) {
+
+        letterCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:letterFillMap[letter].fill
+          }
+        };
+
+        letterCell.font = {
+          color:{
+            argb:letterFillMap[letter].font
+          }
+        };
+
+      }
+
+
+      const gpaCell =
+        ws.getCell(r, 8);
+
+      const gpaValue =
+        Number(gpaCell.value);
+
+      if (
+        Number.isFinite(gpaValue) &&
+        gpaCell.value !== null &&
+        gpaCell.value !== '' &&
+        gpaValue <= 2
+      ) {
+
+        gpaCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:'FFFFC7CE'
+          }
+        };
+
+        gpaCell.font = {
+          color:{
+            argb:'FF9C0006'
+          }
+        };
+
+      }
+
+    }
+
+
+    /*
+      Final pass: reapply visible fills after all table and worksheet
+      formatting has been committed.
+    */
+    ws.getRow(1).eachCell(cell => {
+
+      cell.fill = {
+        type:'pattern',
+        pattern:'solid',
+        fgColor:{
+          argb:sheetColor
+        }
+      };
+
+      cell.font = {
+        bold:true,
+        color:{
+          argb:'FFFFFFFF'
+        }
+      };
+
+    });
+
+
+    for (let r = 2; r <= ws.rowCount; r++) {
+
+      const dCell =
+        ws.getCell(r, 4);
+
+      const letter =
+        String(dCell.value ?? '').trim().toUpperCase();
+
+      const finalLetterStyles = {
+
+        A:['FF00B0F0','FF000000'],
+        B:['FF92D050','FF000000'],
+        C:['FFD9D9D9','FF000000'],
+        D:['FFFFEB9C','FF9C5700'],
+        F:['FFFFC7CE','FF9C0006']
+
+      };
+
+      if (finalLetterStyles[letter]) {
+
+        const [fillColor,fontColor] =
+          finalLetterStyles[letter];
+
+        dCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:fillColor
+          },
+          bgColor:{
+            argb:fillColor
+          }
+        };
+
+        dCell.font = {
+          color:{
+            argb:fontColor
+          }
+        };
+
+      }
+
+
+      const hCell =
+        ws.getCell(r, 8);
+
+      const raw =
+        hCell.value;
+
+      const gpa =
+        typeof raw === 'number'
+          ? raw
+          : Number(String(raw ?? '').trim());
+
+      if (
+        raw !== null &&
+        raw !== '' &&
+        Number.isFinite(gpa) &&
+        gpa <= 2
+      ) {
+
+        hCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:'FFFFC7CE'
+          },
+          bgColor:{
+            argb:'FFFFC7CE'
+          }
+        };
+
+        hCell.font = {
+          color:{
+            argb:'FF9C0006'
+          }
+        };
+
+      }
+
+    }
+
+
+    /*
+      Reapply duplicate-name formatting last on the DF sheet as well.
+    */
+    if (isDF) {
+
+      const finalCounts =
+        new Map();
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const value =
+          String(ws.getCell(r, 1).value ?? '').trim();
+
+        if (!value)
+          continue;
+
+        finalCounts.set(
+          value,
+          (finalCounts.get(value) || 0) + 1
+        );
+
+      }
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const aCell =
+          ws.getCell(r, 1);
+
+        const value =
+          String(aCell.value ?? '').trim();
+
+        if (
+          value &&
+          (finalCounts.get(value) || 0) > 1
+        ) {
+
+          aCell.fill = {
+            type:'pattern',
+            pattern:'solid',
+            fgColor:{
+              argb:'FFFFFF00'
+            },
+            bgColor:{
+              argb:'FFFFFF00'
+            }
+          };
+
+          aCell.font = {
+            color:{
+              argb:'FF7F6000'
+            }
+          };
+
+        }
+
+      }
+
+    }
+
+
+    /*
+      Explicitly enable Excel sort/filter dropdowns on row 1.
+      The filter range always covers the actual data rows on the sheet.
+    */
+    ws.autoFilter = {
+      from:'A1',
+      to:`H${Math.max(ws.rowCount, 1)}`
+    };
+
+
+    return ws;
+
+  }
+
+
+
+  async function applyVisibleSheetBounds(buffer) {
+
+    if (typeof JSZip === 'undefined')
+      throw new Error(
+        'The workbook visibility library did not load. Connect to the internet and reopen the app.'
+      );
+
+    const zip =
+      await JSZip.loadAsync(buffer);
+
+    const worksheetFiles =
+      Object.keys(zip.files)
+        .filter(name =>
+          /^xl\/worksheets\/sheet\d+\.xml$/i.test(name)
+        );
+
+
+    for (const fileName of worksheetFiles) {
+
+      let xml =
+        await zip.file(fileName).async('string');
+
+
+      /*
+        Hide all unspecified rows by default.
+        Every actual report row already exists explicitly in the XML,
+        so those rows are then forced visible below.
+      */
+      if (/<sheetFormatPr\b/i.test(xml)) {
+
+        xml =
+          xml.replace(
+            /<sheetFormatPr\b([^>]*)\/>/i,
+            (match, attrs) => {
+
+              let updated =
+                attrs.replace(
+                  /\s+zeroHeight="[^"]*"/i,
+                  ''
+                );
+
+              return `<sheetFormatPr${updated} zeroHeight="1"/>`;
+
+            }
+          );
+
+      } else {
+
+        xml =
+          xml.replace(
+            /(<sheetData\b)/i,
+            '<sheetFormatPr zeroHeight="1"/>\n$1'
+          );
+
+      }
+
+
+      /*
+        Explicit report rows stay visible.
+      */
+      xml =
+        xml.replace(
+          /<row\b([^>]*)>/gi,
+          (match, attrs) => {
+
+            let updated =
+              attrs.replace(
+                /\s+hidden="[^"]*"/i,
+                ''
+              );
+
+            return `<row${updated} hidden="0">`;
+
+          }
+        );
+
+
+      /*
+        Hide every Excel column to the right of H using one compact
+        column-range definition instead of creating 16,000+ objects.
+      */
+      const hiddenCols =
+        '<col min="9" max="16384" hidden="1"/>';
+
+
+      if (/<cols\b[^>]*>/i.test(xml)) {
+
+        xml =
+          xml.replace(
+            /<\/cols>/i,
+            `${hiddenCols}</cols>`
+          );
+
+      } else {
+
+        const colsBlock =
+          `<cols>${hiddenCols}</cols>`;
+
+        if (/<sheetData\b/i.test(xml)) {
+
+          xml =
+            xml.replace(
+              /(<sheetData\b)/i,
+              `${colsBlock}\n$1`
+            );
+
+        }
+
+      }
+
+
+      /*
+        Force a visible worksheet AutoFilter on A:H through the final
+        populated row. This is inserted directly into the worksheet XML
+        because relying on ExcelJS/table metadata alone does not always
+        show the dropdown arrows in Excel.
+      */
+      let lastRow =
+        1;
+
+      const rowMatches =
+        [...xml.matchAll(/<row\b[^>]*\br="(\d+)"/gi)];
+
+      if (rowMatches.length) {
+
+        lastRow =
+          Math.max(
+            ...rowMatches.map(m => Number(m[1]))
+          );
+
+      }
+
+
+      const filterXml =
+        `<autoFilter ref="A1:H${lastRow}"/>`;
+
+
+      if (/<autoFilter\b[^>]*\/>/i.test(xml)) {
+
+        xml =
+          xml.replace(
+            /<autoFilter\b[^>]*\/>/i,
+            filterXml
+          );
+
+      } else if (/<autoFilter\b[^>]*>[\s\S]*?<\/autoFilter>/i.test(xml)) {
+
+        xml =
+          xml.replace(
+            /<autoFilter\b[^>]*>[\s\S]*?<\/autoFilter>/i,
+            filterXml
+          );
+
+      } else {
+
+        xml =
+          xml.replace(
+            /<\/sheetData>/i,
+            `</sheetData>\n${filterXml}`
+          );
+
+      }
+
+
+      zip.file(
+        fileName,
+        xml
+      );
+
+    }
+
+
+    return await zip.generateAsync({
+      type:'arraybuffer',
+      compression:'DEFLATE',
+      compressionOptions:{
+        level:6
+      }
+    });
+
+  }
+
+
+
+  async function generateReport() {
+
+    if (!selectedFile)
+      return;
+
+
+    if (
+      typeof ExcelJS === 'undefined' ||
+      typeof Papa === 'undefined' ||
+      typeof JSZip === 'undefined'
+    ) {
+
+      showError(
+        'The Excel/CSV libraries did not load. Connect to the internet and reopen this HTML file, then try again.'
+      );
+
+      return;
+
+    }
+
+
+    generateBtn.disabled =
+      true;
+
+    generateBtn.textContent =
+      'Generating…';
+
+    status.className =
+      'status';
+
+    summary.style.display =
+      'none';
+
+
+    try {
+
+      const text =
+        await readCsvText(selectedFile);
+
+
+      const parsed =
+        Papa.parse(
+          text,
+          {
+            skipEmptyLines:false
+          }
+        );
+
+
+      if (
+        parsed.errors?.some(
+          e =>
+            e.type === 'Quotes' ||
+            e.type === 'Delimiter'
+        )
+      ) {
+
+        throw new Error(
+          'The CSV could not be parsed cleanly. Please export it again and retry.'
+        );
+
+      }
+
+
+      const all =
+        parseReport(
+          parsed.data
+        );
+
+
+      const high =
+        all
+          .filter(
+            r =>
+              r.grade >= 9 &&
+              r.grade <= 12
+          )
+          .sort(sortRows);
+
+
+      const middle =
+        all
+          .filter(
+            r =>
+              r.grade >= 6 &&
+              r.grade <= 8
+          )
+          .sort(sortRows);
+
+
+      const df =
+        all
+          .filter(
+            r =>
+              r.grade >= 6 &&
+              r.grade <= 12 &&
+              (
+                r.letter === 'D' ||
+                r.letter === 'F'
+              )
+          )
+          .sort(sortRows);
+
+
+      const iso =
+        outputDate.value ||
+        toISODate(new Date());
+
+
+      const tag =
+        shortDate(iso);
+
+
+      const workbook =
+        new ExcelJS.Workbook();
+
+
+      workbook.creator =
+        'GradeReport Generator';
+
+      workbook.created =
+        new Date();
+
+      workbook.modified =
+        new Date();
+
+
+      addSheet(
+        workbook,
+        `High ${tag}`,
+        'TableHigh',
+        high,
+        false,
+        'FF5B9BD5'
+      );
+
+
+      addSheet(
+        workbook,
+        `Middle ${tag}`,
+        'TableMiddle',
+        middle,
+        false,
+        'FF00B050'
+      );
+
+
+      addSheet(
+        workbook,
+        'DF',
+        'TableDF',
+        df,
+        true,
+        'FFFF0000'
+      );
+
+
+      const buffer =
+        await workbook.xlsx.writeBuffer();
+
+
+      const boundedBuffer =
+        await applyVisibleSheetBounds(buffer);
+
+
+      const blob =
+        new Blob(
+          [boundedBuffer],
+          {
+            type:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          }
+        );
+
+
+      const url =
+        URL.createObjectURL(blob);
+
+
+      const a =
+        document.createElement('a');
+
+
+      a.href =
+        url;
+
+      a.download =
+        `GradeReport ${tag}.xlsx`;
+
+
+      document.body.appendChild(a);
+
+      a.click();
+
+      a.remove();
+
+
+      setTimeout(
+        () =>
+          URL.revokeObjectURL(url),
+        1000
+      );
+
+
+      document
+        .getElementById('highCount')
+        .textContent =
+          high.length.toLocaleString();
+
+
+      document
+        .getElementById('middleCount')
+        .textContent =
+          middle.length.toLocaleString();
+
+
+      document
+        .getElementById('dfCount')
+        .textContent =
+          df.length.toLocaleString();
+
+
+      summary.style.display =
+        'grid';
+
+
+      showOK(
+        `Report created successfully.
+High: ${high.length} rows | Middle: ${middle.length} rows | DF: ${df.length} rows
+Each table was sized to its actual data rows; unused columns and rows were hidden, with filters, frozen headers, and visible grade/GPA fills retained.`
+      );
+
+    }
+
+    catch (err) {
+
+      console.error(err);
+
+      showError(
+        err?.message ||
+        String(err)
+      );
+
+    }
+
+    finally {
+
+      generateBtn.disabled =
+        false;
+
+      generateBtn.textContent =
+        'Generate Excel Report';
+
+    }
+
+  }
+
+
+
+  function showOK(msg) {
+
+    status.textContent =
+      msg;
+
+    status.className =
+      'status ok';
+
+  }
+
+
+
+  function showError(msg) {
+
+    status.textContent =
+      msg;
+
+    status.className =
+      'status err';
+
+  }
+
+})();
+
+</script>
+
+</body>
+</html>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
