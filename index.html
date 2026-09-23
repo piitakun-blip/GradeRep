@@ -221,7 +221,7 @@
 
 <body>
 
-<div class="wrap">
+<div class="wrap grade-report-app">
   <div class="card">
 
     <h1>GradeReport Generator</h1>
@@ -353,6 +353,20 @@
 <script>
 
 (() => {
+
+  /*
+    Defensive cleanup:
+    if this HTML is ever accidentally pasted/saved twice into one file,
+    keep only the first GradeReport app interface.
+  */
+  const appInstances =
+    document.querySelectorAll('.grade-report-app');
+
+  appInstances.forEach((app, index) => {
+    if (index > 0)
+      app.remove();
+  });
+
 
   const fileInput =
     document.getElementById('csvFile');
