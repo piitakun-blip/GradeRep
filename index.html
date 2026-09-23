@@ -125,12 +125,14 @@
     margin-bottom:6px;
   }
 
-  .field input {
+  .field input,
+  .field select {
     width:100%;
     border:1px solid var(--line);
     border-radius:9px;
     padding:10px 11px;
     font:inherit;
+    background:#fff;
   }
 
   .actions {
@@ -257,11 +259,12 @@
           Score column heading
         </label>
 
-        <input
-          id="scoreHeading"
-          value="Q3"
-          maxlength="12"
-        />
+        <select id="scoreHeading">
+          <option value="Q1">Q1</option>
+          <option value="Q2">Q2</option>
+          <option value="Q3">Q3</option>
+          <option value="Q4">Q4</option>
+        </select>
       </div>
 
       <div class="field">
@@ -374,7 +377,31 @@
   const summary =
     document.getElementById('summary');
 
+  const quarterStorageKey =
+    'gradeReportLastQuarter';
+
   let selectedFile = null;
+
+
+  const savedQuarter =
+    localStorage.getItem(quarterStorageKey);
+
+  if (['Q1','Q2','Q3','Q4'].includes(savedQuarter)) {
+    scoreHeading.value = savedQuarter;
+  } else {
+    scoreHeading.value = 'Q1';
+  }
+
+
+  scoreHeading.addEventListener(
+    'change',
+    () => {
+      localStorage.setItem(
+        quarterStorageKey,
+        scoreHeading.value
+      );
+    }
+  );
 
 
   chooseBtn.addEventListener(
@@ -924,7 +951,7 @@
 
       ['B','FF92D050','FF000000'],
 
-      ['C','FFFFEB9C','FF9C5700'],
+      ['C','FFD9D9D9','FF000000'],
 
       ['D','FFFFEB9C','FF9C5700'],
 
@@ -989,13 +1016,10 @@
 
       rules:[{
 
-        type:'cellIs',
-
-        operator:'between',
+        type:'expression',
 
         formulae:[
-          0.001,
-          2
+          'AND(ISNUMBER(H1),H1<=2)'
         ],
 
         style:{
@@ -1040,7 +1064,7 @@
           type:'expression',
 
           formulae:[
-            'COUNTIF($A:$A,A1)>1'
+            'AND(A1<>"",COUNTIF($A:$A,A1)>1)'
           ],
 
           style:{
@@ -1048,7 +1072,7 @@
             font:{
 
               color:{
-                argb:'FF9C5700'
+                argb:'FF7F6000'
               }
 
             },
@@ -1060,7 +1084,7 @@
               pattern:'solid',
 
               fgColor:{
-                argb:'FFFFEB9C'
+                argb:'FFFFFF00'
               }
 
             }
@@ -1082,7 +1106,8 @@
     name,
     tableName,
     records,
-    isDF = false
+    isDF = false,
+    sheetColor = 'FF5B9BD5'
   ) {
 
     const ws =
@@ -1090,7 +1115,7 @@
 
 
     const heading =
-      (scoreHeading.value || 'Q3').trim();
+      (scoreHeading.value || 'Q1').trim();
 
 
     ws.addTable({
@@ -1147,6 +1172,89 @@
       ws,
       isDF
     );
+
+
+    ws.properties.tabColor = {
+      argb: sheetColor
+    };
+
+
+    ws.getRow(1).eachCell(cell => {
+
+      cell.fill = {
+        type:'pattern',
+        pattern:'solid',
+        fgColor:{
+          argb:sheetColor
+        }
+      };
+
+      cell.font = {
+        bold:true,
+        color:{
+          argb:'FFFFFFFF'
+        }
+      };
+
+    });
+
+
+    /*
+      Directly fill duplicate names on the DF sheet as well.
+      This guarantees the yellow background is visible even in
+      Excel versions that render conditional-format fills differently.
+    */
+    if (isDF) {
+
+      const counts = new Map();
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const value =
+          String(ws.getCell(r, 1).value ?? '').trim();
+
+        if (!value)
+          continue;
+
+        counts.set(
+          value,
+          (counts.get(value) || 0) + 1
+        );
+
+      }
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const cell =
+          ws.getCell(r, 1);
+
+        const value =
+          String(cell.value ?? '').trim();
+
+        if (
+          value &&
+          (counts.get(value) || 0) > 1
+        ) {
+
+          cell.fill = {
+            type:'pattern',
+            pattern:'solid',
+            fgColor:{
+              argb:'FFFFFF00'
+            }
+          };
+
+          cell.font = {
+            color:{
+              argb:'FF7F6000'
+            }
+          };
+
+        }
+
+      }
+
+    }
 
 
     return ws;
@@ -1286,7 +1394,8 @@
         `High ${tag}`,
         'TableHigh',
         high,
-        false
+        false,
+        'FF5B9BD5'
       );
 
 
@@ -1295,7 +1404,8 @@
         `Middle ${tag}`,
         'TableMiddle',
         middle,
-        false
+        false,
+        'FF00B050'
       );
 
 
@@ -1304,7 +1414,8 @@
         'DF',
         'TableDF',
         df,
-        true
+        true,
+        'FFFF0000'
       );
 
 
