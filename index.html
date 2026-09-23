@@ -1186,7 +1186,8 @@
       (scoreHeading.value || 'Q1').trim();
 
 
-    ws.addTable({
+    const table =
+      ws.addTable({
 
       name:tableName,
 
@@ -1234,6 +1235,15 @@
         excelRows(records)
 
     });
+
+
+    /*
+      Commit the Excel table before applying custom cell fills.
+      Otherwise the table style can overwrite fills during serialization.
+    */
+    if (table && typeof table.commit === 'function') {
+      table.commit();
+    }
 
 
     styleWorksheet(
@@ -1413,6 +1423,173 @@
             argb:'FF9C0006'
           }
         };
+
+      }
+
+    }
+
+
+    /*
+      Final pass: reapply visible fills after all table and worksheet
+      formatting has been committed.
+    */
+    ws.getRow(1).eachCell(cell => {
+
+      cell.fill = {
+        type:'pattern',
+        pattern:'solid',
+        fgColor:{
+          argb:sheetColor
+        }
+      };
+
+      cell.font = {
+        bold:true,
+        color:{
+          argb:'FFFFFFFF'
+        }
+      };
+
+    });
+
+
+    for (let r = 2; r <= ws.rowCount; r++) {
+
+      const dCell =
+        ws.getCell(r, 4);
+
+      const letter =
+        String(dCell.value ?? '').trim().toUpperCase();
+
+      const finalLetterStyles = {
+
+        A:['FF00B0F0','FF000000'],
+        B:['FF92D050','FF000000'],
+        C:['FFD9D9D9','FF000000'],
+        D:['FFFFEB9C','FF9C5700'],
+        F:['FFFFC7CE','FF9C0006']
+
+      };
+
+      if (finalLetterStyles[letter]) {
+
+        const [fillColor,fontColor] =
+          finalLetterStyles[letter];
+
+        dCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:fillColor
+          },
+          bgColor:{
+            argb:fillColor
+          }
+        };
+
+        dCell.font = {
+          color:{
+            argb:fontColor
+          }
+        };
+
+      }
+
+
+      const hCell =
+        ws.getCell(r, 8);
+
+      const raw =
+        hCell.value;
+
+      const gpa =
+        typeof raw === 'number'
+          ? raw
+          : Number(String(raw ?? '').trim());
+
+      if (
+        raw !== null &&
+        raw !== '' &&
+        Number.isFinite(gpa) &&
+        gpa <= 2
+      ) {
+
+        hCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:'FFFFC7CE'
+          },
+          bgColor:{
+            argb:'FFFFC7CE'
+          }
+        };
+
+        hCell.font = {
+          color:{
+            argb:'FF9C0006'
+          }
+        };
+
+      }
+
+    }
+
+
+    /*
+      Reapply duplicate-name formatting last on the DF sheet as well.
+    */
+    if (isDF) {
+
+      const finalCounts =
+        new Map();
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const value =
+          String(ws.getCell(r, 1).value ?? '').trim();
+
+        if (!value)
+          continue;
+
+        finalCounts.set(
+          value,
+          (finalCounts.get(value) || 0) + 1
+        );
+
+      }
+
+      for (let r = 2; r <= ws.rowCount; r++) {
+
+        const aCell =
+          ws.getCell(r, 1);
+
+        const value =
+          String(aCell.value ?? '').trim();
+
+        if (
+          value &&
+          (finalCounts.get(value) || 0) > 1
+        ) {
+
+          aCell.fill = {
+            type:'pattern',
+            pattern:'solid',
+            fgColor:{
+              argb:'FFFFFF00'
+            },
+            bgColor:{
+              argb:'FFFFFF00'
+            }
+          };
+
+          aCell.font = {
+            color:{
+              argb:'FF7F6000'
+            }
+          };
+
+        }
 
       }
 
