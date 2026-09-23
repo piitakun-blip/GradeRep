@@ -339,6 +339,7 @@
     <div class="privacy">
       The CSV is processed in your browser.
       The student data is not uploaded by this page.
+      The CSV reader preserves UTF-8 and common Windows-1252 accented characters.
       An internet connection is only used to load the Excel/CSV JavaScript libraries.
     </div>
 
@@ -485,12 +486,79 @@
 
 
 
+  async function readCsvText(file) {
+
+    const buffer =
+      await file.arrayBuffer();
+
+    const bytes =
+      new Uint8Array(buffer);
+
+
+    /* UTF-8 BOM */
+    if (
+      bytes.length >= 3 &&
+      bytes[0] === 0xEF &&
+      bytes[1] === 0xBB &&
+      bytes[2] === 0xBF
+    ) {
+      return new TextDecoder('utf-8')
+        .decode(bytes.subarray(3));
+    }
+
+
+    /* UTF-16 LE BOM */
+    if (
+      bytes.length >= 2 &&
+      bytes[0] === 0xFF &&
+      bytes[1] === 0xFE
+    ) {
+      return new TextDecoder('utf-16le')
+        .decode(bytes.subarray(2));
+    }
+
+
+    /* UTF-16 BE BOM */
+    if (
+      bytes.length >= 2 &&
+      bytes[0] === 0xFE &&
+      bytes[1] === 0xFF
+    ) {
+      return new TextDecoder('utf-16be')
+        .decode(bytes.subarray(2));
+    }
+
+
+    /*
+      First try strict UTF-8. If the CSV contains bytes that are not valid
+      UTF-8, fall back to Windows-1252, which is common in school-system
+      exports and preserves characters such as í, é, ñ, ü, etc.
+    */
+    try {
+
+      return new TextDecoder(
+        'utf-8',
+        { fatal:true }
+      ).decode(bytes);
+
+    }
+    catch (_) {
+
+      return new TextDecoder(
+        'windows-1252'
+      ).decode(bytes);
+
+    }
+
+  }
+
+
   async function detectDate(file) {
 
     try {
 
       const text =
-        await file.text();
+        await readCsvText(file);
 
       const m =
         text.match(
@@ -1299,7 +1367,7 @@
     try {
 
       const text =
-        await selectedFile.text();
+        await readCsvText(selectedFile);
 
 
       const parsed =
