@@ -1325,6 +1325,100 @@
     }
 
 
+    /*
+      Apply visible fills directly to the generated workbook.
+      This is more reliable than depending on ExcelJS conditional
+      formatting rendering support.
+    */
+    const letterFillMap = {
+
+      A:{
+        fill:'FF00B0F0',
+        font:'FF000000'
+      },
+
+      B:{
+        fill:'FF92D050',
+        font:'FF000000'
+      },
+
+      C:{
+        fill:'FFD9D9D9',
+        font:'FF000000'
+      },
+
+      D:{
+        fill:'FFFFEB9C',
+        font:'FF9C5700'
+      },
+
+      F:{
+        fill:'FFFFC7CE',
+        font:'FF9C0006'
+      }
+
+    };
+
+
+    for (let r = 2; r <= ws.rowCount; r++) {
+
+      const letterCell =
+        ws.getCell(r, 4);
+
+      const letter =
+        String(letterCell.value ?? '').trim().toUpperCase();
+
+      if (letterFillMap[letter]) {
+
+        letterCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:letterFillMap[letter].fill
+          }
+        };
+
+        letterCell.font = {
+          color:{
+            argb:letterFillMap[letter].font
+          }
+        };
+
+      }
+
+
+      const gpaCell =
+        ws.getCell(r, 8);
+
+      const gpaValue =
+        Number(gpaCell.value);
+
+      if (
+        Number.isFinite(gpaValue) &&
+        gpaCell.value !== null &&
+        gpaCell.value !== '' &&
+        gpaValue <= 2
+      ) {
+
+        gpaCell.fill = {
+          type:'pattern',
+          pattern:'solid',
+          fgColor:{
+            argb:'FFFFC7CE'
+          }
+        };
+
+        gpaCell.font = {
+          color:{
+            argb:'FF9C0006'
+          }
+        };
+
+      }
+
+    }
+
+
     return ws;
 
   }
@@ -1555,7 +1649,7 @@
       showOK(
         `Report created successfully.
 High: ${high.length} rows | Middle: ${middle.length} rows | DF: ${df.length} rows
-Each table was sized to its actual data rows.`
+Each table was sized to its actual data rows, with visible grade and GPA fills applied.`
       );
 
     }
